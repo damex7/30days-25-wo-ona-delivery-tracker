@@ -32,7 +32,8 @@ export function LiveStatus({ mode, lastSync, offline, pointAt }: { mode: LiveMod
         {label}
       </span>
       {since !== null && <span>· rider seen {ago(since)}</span>}
-      {since === null && <span>· checked {ago(Math.round((now - lastSync) / 1000))}</span>}
+      {/* When updates are pushed, "checked X ago" means nothing; only show it while polling. */}
+      {since === null && mode !== "live" && <span>· checked {ago(Math.max(0, Math.round((now - lastSync) / 1000)))}</span>}
     </p>
   );
 }

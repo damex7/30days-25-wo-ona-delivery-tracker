@@ -94,11 +94,18 @@ export function usePolling(fn: () => void | Promise<void>, ms: number, enabled =
     const onVisible = () => {
       if (document.visibilityState === "visible") void ref.current();
     };
+    // Coming back with the Back button restores the page from Chrome's
+    // back-forward cache, frozen as it was: catch up straight away.
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) void ref.current();
+    };
     document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onShow);
     return () => {
       stopped = true;
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onShow);
     };
   }, [ms, enabled]);
 }

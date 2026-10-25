@@ -7,8 +7,11 @@
 // (browser only) and drive it imperatively from React props: React decides
 // WHAT to show, this component tells Leaflet HOW.
 //
-// Map tiles come from CARTO's free "Positron" style (built on OpenStreetMap
-// data): a quiet grey map, so the blue route and black rider stand out.
+// Map tiles come from OpenStreetMap (free, no API key). CSS in globals.css
+// turns them grey (and dark in dark mode), so the blue route and black rider
+// stand out. For heavy real-world traffic, switch TILE_URL to a tile provider
+// with its own key (MapTiler, Stadia Maps), as OpenStreetMap's servers are
+// meant for light use.
 import "leaflet/dist/leaflet.css";
 import type * as Leaflet from "leaflet";
 import { useEffect, useRef, useState } from "react";
@@ -41,13 +44,8 @@ type Props = {
   className?: string;
 };
 
-const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
-const tileUrl = (dark: boolean) =>
-  `https://{s}.basemaps.cartocdn.com/${dark ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`;
-
-function isDark() {
-  return getComputedStyle(document.documentElement).getPropertyValue("--map-tiles").trim() === "dark";
-}
+const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 // Marker shapes, drawn with HTML and CSS (styles in globals.css).
 const PIN_SVG = `<svg class="wo-pin" viewBox="0 0 30 40" aria-hidden="true"><path d="M15 39C15 39 2 23.5 2 14a13 13 0 0 1 26 0c0 9.5-13 25-13 25z" fill="var(--black)" stroke="var(--surface)" stroke-width="2.5"/><circle cx="15" cy="14" r="5" fill="var(--surface)"/></svg>`;
@@ -56,7 +54,6 @@ export default function DeliveryMap({ pickup, dropoff, riders = [], trail = [], 
   const box = useRef<HTMLDivElement>(null);
   const L = useRef<typeof Leaflet | null>(null);
   const map = useRef<Leaflet.Map | null>(null);
-  const tiles = useRef<Leaflet.TileLayer | null>(null);
   const layers = useRef<{
     pickup?: Leaflet.Marker; dropoff?: Leaflet.Marker; picked?: Leaflet.Marker;
     trail?: Leaflet.Polyline; plan?: Leaflet.Polyline;
@@ -79,19 +76,15 @@ export default function DeliveryMap({ pickup, dropoff, riders = [], trail = [], 
       if (cancelled || !box.current || map.current) return;
       L.current = lib;
       const m = lib.map(box.current, { zoomControl: true, attributionControl: true, center: [6.5244, 3.3792], zoom: 12 });
-      tiles.current = lib.tileLayer(tileUrl(isDark()), { attribution: ATTRIBUTION, maxZoom: 19, subdomains: "abcd" }).addTo(m);
+      lib.tileLayer(TILE_URL, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(m);
       m.on("click", (e: Leaflet.LeafletMouseEvent) => onPickRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng }));
       // If the person drags the map themselves, stop snapping back to the rider.
       m.on("dragstart", () => setFollow(false));
       map.current = m;
       setReady(true);
     })();
-    // Swap light/dark tiles when the theme changes.
-    const observer = new MutationObserver(() => tiles.current?.setUrl(tileUrl(isDark())));
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     return () => {
       cancelled = true;
-      observer.disconnect();
       for (const r of layers.current.riders.values()) if (r.anim) cancelAnimationFrame(r.anim);
       // Stop any pan/zoom animation first: removing a map mid-animation makes
       // Leaflet's next animation frame read a position that no longer exists.
